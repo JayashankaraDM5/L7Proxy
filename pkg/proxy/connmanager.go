@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -141,4 +142,3 @@ func sendHTTPConnectionClose(conn net.Conn) {
 	}
 	_ = conn.SetWriteDeadline(time.Time{})
 }
-

@@ -3,10 +3,8 @@ package proxy
 import (
 	"bufio"
 	"errors"
-	"io"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"time"
 )
@@ -86,7 +84,7 @@ func handleTLSPassthrough(clientConn net.Conn, cm *ConnManager, filter *RequestF
 	defer clientConn.Close()
 	log.Printf("Handling HTTPS passthrough from %v", clientConn.RemoteAddr())
 
-	sni, err := peekClientHelloSNI(clientConn)
+	sni, wrappedConn, err := peekClientHelloSNI(clientConn)
 	if err != nil || sni == "" {
 		log.Printf("Failed to parse or no SNI for passthrough: %v", err)
 		return
@@ -96,6 +94,9 @@ func handleTLSPassthrough(clientConn net.Conn, cm *ConnManager, filter *RequestF
 		log.Printf("Blocked HTTPS passthrough SNI %s by filter", sni)
 		return
 	}
+
+	// Use wrappedConn which buffers peeked data
+	clientConn = wrappedConn
 
 	// Dial destination server on port 443
 	destConn, err := net.DialTimeout("tcp", sni+":443", 10*time.Second)
@@ -125,31 +126,33 @@ func handleTLSPassthrough(clientConn net.Conn, cm *ConnManager, filter *RequestF
 	log.Printf("Closed TLS passthrough connection id %s", id)
 }
 
-// parseClientHelloSNI reads the initial TLS ClientHello packet to extract the SNI hostname.
+// parseClientHelloSNI wraps peekClientHelloSNI for bool return and SNI string
 func parseClientHelloSNI(conn net.Conn) (bool, string) {
-	// Use peekClientHelloSNI to read bytes non-destructively
-	sni, err := peekClientHelloSNI(conn)
+	sni, _, err := peekClientHelloSNI(conn)
 	return err == nil && sni != "", sni
 }
 
-// peekClientHelloSNI reads TLS ClientHello and returns SNI without consuming from conn.
-func peekClientHelloSNI(conn net.Conn) (string, error) {
+// peekClientHelloSNI reads TLS ClientHello and returns SNI and wrapped connection
+func peekClientHelloSNI(conn net.Conn) (string, net.Conn, error) {
 	reader := bufio.NewReader(conn)
 	data, err := reader.Peek(1024) // peek enough bytes for SNI
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	sni, err := extractSNIFromTLSClientHello(data)
 	if err != nil || sni == "" {
-		return "", errors.New("SNI not found")
+		return "", nil, errors.New("SNI not found")
 	}
 
-	// Wrap conn so future reads get data from buffered reader
-	*conn = &connWithBufferedReader{Conn: conn, reader: reader}
-	return sni, nil
+	wrappedConn := &connWithBufferedReader{
+		Conn:   conn,
+		reader: reader,
+	}
+	return sni, wrappedConn, nil
 }
 
+// connWithBufferedReader wraps net.Conn to implement io.Reader from bufio.Reader first
 type connWithBufferedReader struct {
 	net.Conn
 	reader *bufio.Reader
@@ -159,12 +162,8 @@ func (c *connWithBufferedReader) Read(b []byte) (int, error) {
 	return c.reader.Read(b)
 }
 
-// extractSNIFromTLSClientHello is a simplified parser to find SNI in TLS ClientHello bytes.
-// For production, replace with full parsing or third-party library.
+// extractSNIFromTLSClientHello is a placeholder to parse SNI from TLS ClientHello bytes
 func extractSNIFromTLSClientHello(data []byte) (string, error) {
-	// Simplified example:
-	// This dummy implementation assumes the SNI is always "example.com"
-	// Replace with real TLS ClientHello parser (e.g. github.com/refraction-networking/utls)
+	// TODO: Implement actual TLS ClientHello parsing to extract SNI reliably
 	return "example.com", nil
 }
-

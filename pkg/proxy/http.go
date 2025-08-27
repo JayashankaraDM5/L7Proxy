@@ -24,6 +24,20 @@ func StartHTTPServer(addr string, cm *ConnManager, filter *RequestFilter) error 
 	log.Printf("Starting HTTP proxy server on %s", addr)
 	return server.ListenAndServe()
 }
+func StartHAProxyListener(addr string, cm *ConnManager, filter *RequestFilter) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleHTTPProxy(w, r, cm, filter)
+	})
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+
+	log.Printf("Starting HTTP proxy server on %s", addr)
+	return server.ListenAndServe()
+}
 
 func handleHTTPProxy(w http.ResponseWriter, r *http.Request, cm *ConnManager, filter *RequestFilter) {
 	log.Printf("HTTP request from %s for host %s", r.RemoteAddr, r.Host)
@@ -104,4 +118,3 @@ func closeConnPair(cm *ConnManager, id string) {
 	cm.Remove(id)
 	log.Printf("Closed HTTP connection %s", id)
 }
-

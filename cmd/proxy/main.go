@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/your-username/go-l7-proxy/pkg/proxy"
+	"github.com/JayashankaraDM5/L7Proxy/pkg/proxy"
 )
 
 func main() {
@@ -52,7 +52,7 @@ func startHTTPSProxy(cm *proxy.ConnManager, filter *proxy.RequestFilter, haproxy
 
 func startHAProxyForwardedListener(cm *proxy.ConnManager, filter *proxy.RequestFilter) {
 	go func() {
-		if err := proxy.StartHAProxyListener(":8080", cm, filter); err != nil {
+		if err := proxy.StartHAProxyListener(":8090", cm, filter); err != nil {
 			log.Fatalf("HAProxy forwarded listener failed: %v", err)
 		}
 	}()
